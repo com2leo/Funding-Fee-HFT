@@ -1,17 +1,14 @@
 {
-  "timestamp": "2025-04-16T12:00:00Z",
+  "timestamp": "2025-04-16T00:00:00Z",
   "data": [
     {
       "symbol": "BTCUSDT",
-      "funding_rate": 0.0003,
-      "next_funding_time": 1713278400000,
-      "executable_qty": 0.5,
-      "executable_value": 31000,
-      "spread": 0.5,
-      "expected_pnl": 8.24
+      "funding_rate": 0.0001,
+      "next_funding_time": 1713254400000,
+      "executable_qty": 0.0,
+      "executable_value": 0.0,
+      "spread": 0.01,
+      "expected_pnl": 0.0
     }
   ]
 }
-
-
-
