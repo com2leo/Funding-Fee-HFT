@@ -1,86 +1,132 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>BTCUSDT Funding Dashboard</title>
-  <style>
-    body { font-family: Arial, sans-serif; background: #111; color: #fff; padding: 20px; }
-    h1 { text-align: center; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { padding: 10px; text-align: center; }
-    th { background-color: #222; }
-    tr.green { background-color: #002d1f; }
-    tr.red { background-color: #2d0000; }
-    tr:hover { background-color: #333; }
-  </style>
-
-  <!-- 🔐 Simple passcode prompt -->
-  <script>
-    const userPasscode = prompt("🔒 Enter passcode to view the dashboard:");
-    const correctPasscode = "alpha123"; // 🔑 CHANGE THIS TO YOUR SECRET CODE
-
-    if (userPasscode !== correctPasscode) {
-      document.write("<h2 style='color:red; text-align:center;'>❌ Access Denied</h2>");
-      throw new Error("Unauthorized");
-    }
-  </script>
-</head>
-<body>
-  <h1>📈 BTCUSDT Funding Rate Dashboard</h1>
-  <table>
-    <thead>
-      <tr>
-        <th>Symbol</th>
-        <th>Funding Rate</th>
-        <th>Qty (BTC)</th>
-        <th>Value (USDT)</th>
-        <th>Countdown</th>
-        <th>Expected PnL ($)</th>
-      </tr>
-    </thead>
-    <tbody id="data-body"></tbody>
-  </table>
-
-  <script>
-    const DATA_URL = 'https://raw.githubusercontent.com/com2leo/Funding-Fee-HFT/main/dashboard.json'; // ⚠️ change this
-
-    function timeUntilFunding(ms) {
-      const now = Date.now();
-      const diff = Math.max(0, ms - now);
-      const m = Math.floor(diff / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      return `${m}m ${s}s`;
-    }
-
-    async function fetchData() {
-      try {
-        const res = await fetch(DATA_URL);
-        const json = await res.json();
-        const tbody = document.getElementById('data-body');
-        tbody.innerHTML = '';
-
-        json.data.forEach(row => {
-          const tr = document.createElement('tr');
-          tr.className = row.expected_pnl > 0 ? 'green' : 'red';
-
-          tr.innerHTML = `
-            <td>${row.symbol}</td>
-            <td>${(row.funding_rate * 100).toFixed(4)}%</td>
-            <td>${row.executable_qty.toFixed(4)}</td>
-            <td>$${row.executable_value.toFixed(2)}</td>
-            <td>${timeUntilFunding(row.next_funding_time)}</td>
-            <td>$${row.expected_pnl.toFixed(4)}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-      } catch (err) {
-        console.error('Failed to load dashboard:', err);
+<html>
+  <head>
+    <title>Funding Dashboard</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #121212;
+        color: white;
+        padding: 2rem;
       }
-    }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+      th, td {
+        padding: 12px;
+        text-align: center;
+      }
+      th {
+        background-color: #222;
+      }
+      tr.green {
+        background-color: #093;
+      }
+      tr.red {
+        background-color: #400;
+      }
+    </style>
+  </head>
 
-    fetchData();
-    setInterval(fetchData, 10000); // refresh every 10s
-  </script>
-</body>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      function BinanceFundingScanner() {
+        const [data, setData] = useState([]);
+
+        useEffect(() => {
+          const fetchData = async () => {
+            try {
+              const res = await fetch("/api/get-binance-funding");
+              const results = await res.json();
+              const result = [];
+
+              for (const item of results) {
+                const { symbol, fundingRate, bestBid, bestAsk, asks } = item;
+                const spread = bestAsk - bestBid;
+                const mid = (bestAsk + bestBid) / 2;
+                const feeRate = 0.0004;
+
+                let totalQty = 0, totalCost = 0, totalPnL = 0;
+
+                for (let [price, qty] of asks) {
+                  const funding = fundingRate * qty * mid;
+                  const fees = feeRate * qty * mid;
+                  const spreadLoss = (price - bestBid) * qty;
+                  const pnl = funding - fees - spreadLoss;
+                  if (pnl > 0) {
+                    totalQty += qty;
+                    totalCost += price * qty;
+                    totalPnL += pnl;
+                  } else break;
+                }
+
+                const vwap = totalQty ? totalCost / totalQty : 0;
+                const notional = vwap * totalQty;
+
+                result.push({
+                  symbol,
+                  fundingRate,
+                  spread,
+                  executableQty: totalQty,
+                  executableValue: notional,
+                  expectedPnL: totalPnL
+                });
+              }
+
+              setData(result);
+            } catch (err) {
+              console.error("Fetch failed:", err);
+            }
+          };
+
+          fetchData();
+          const interval = setInterval(fetchData, 2000);
+          return () => clearInterval(interval);
+        }, []);
+
+        return (
+          <div>
+            <h2>📈 Binance BTCUSDT Funding Scanner</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Funding</th>
+                  <th>Spread</th>
+                  <th>Qty</th>
+                  <th>Value ($)</th>
+                  <th>PnL ($)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((d, i) => (
+                  <tr key={i} className={d.expectedPnL > 0 ? "green" : "red"}>
+                    <td>{d.symbol}</td>
+                    <td>{(d.fundingRate * 100).toFixed(4)}%</td>
+                    <td>{d.spread.toFixed(2)}</td>
+                    <td>{d.executableQty.toFixed(4)}</td>
+                    <td>${d.executableValue.toFixed(2)}</td>
+                    <td>${d.expectedPnL.toFixed(4)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<BinanceFundingScanner />);
+    </script>
+  </body>
 </html>
