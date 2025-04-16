@@ -49,6 +49,11 @@
               const res = await fetch("/api/get-binance-funding");
               const item = await res.json();
 
+              if (!item || !item.asks) {
+                console.error("⛔ Invalid data:", item);
+                return;
+              }
+
               const { symbol, fundingRate, bestBid, bestAsk, asks } = item;
               const spread = bestAsk - bestBid;
               const mid = (bestAsk + bestBid) / 2;
@@ -84,8 +89,8 @@
             }
           };
 
-          fetchData(); // runs only once for now
-          // uncomment below to enable polling:
+          fetchData(); // only run once
+          // to refresh every few sec: enable below
           // const interval = setInterval(fetchData, 2000);
           // return () => clearInterval(interval);
         }, []);
