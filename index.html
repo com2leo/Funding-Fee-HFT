@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Funding Dashboard</title>
+    <title>Funding Profit Scanner</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
@@ -34,70 +34,67 @@
       }
     </style>
   </head>
-
   <body>
     <div id="root"></div>
 
     <script type="text/babel">
-      const { useState, useEffect } = React;
+      const { useEffect, useState } = React;
 
-      function BinanceFundingScanner() {
-        const [data, setData] = useState([]);
+      function FundingScanner() {
+        const [data, setData] = useState(null);
 
         useEffect(() => {
           const fetchData = async () => {
             try {
               const res = await fetch("/api/get-binance-funding");
-              const results = await res.json();
-              const result = [];
+              const item = await res.json();
 
-              for (const item of results) {
-                const { symbol, fundingRate, bestBid, bestAsk, asks } = item;
-                const spread = bestAsk - bestBid;
-                const mid = (bestAsk + bestBid) / 2;
-                const feeRate = 0.0004;
+              const { symbol, fundingRate, bestBid, bestAsk, asks } = item;
+              const spread = bestAsk - bestBid;
+              const mid = (bestAsk + bestBid) / 2;
+              const feeRate = 0.0004;
 
-                let totalQty = 0, totalCost = 0, totalPnL = 0;
+              let totalQty = 0, totalCost = 0, totalPnL = 0;
 
-                for (let [price, qty] of asks) {
-                  const funding = fundingRate * qty * mid;
-                  const fees = feeRate * qty * mid;
-                  const spreadLoss = (price - bestBid) * qty;
-                  const pnl = funding - fees - spreadLoss;
-                  if (pnl > 0) {
-                    totalQty += qty;
-                    totalCost += price * qty;
-                    totalPnL += pnl;
-                  } else break;
-                }
-
-                const vwap = totalQty ? totalCost / totalQty : 0;
-                const notional = vwap * totalQty;
-
-                result.push({
-                  symbol,
-                  fundingRate,
-                  spread,
-                  executableQty: totalQty,
-                  executableValue: notional,
-                  expectedPnL: totalPnL
-                });
+              for (let [price, qty] of asks) {
+                const funding = fundingRate * qty * mid;
+                const fees = feeRate * qty * mid;
+                const spreadLoss = (price - bestBid) * qty;
+                const pnl = funding - fees - spreadLoss;
+                if (pnl > 0) {
+                  totalQty += qty;
+                  totalCost += price * qty;
+                  totalPnL += pnl;
+                } else break;
               }
 
-              setData(result);
+              const vwap = totalQty ? totalCost / totalQty : 0;
+              const notional = vwap * totalQty;
+
+              setData({
+                symbol,
+                fundingRate,
+                spread,
+                executableQty: totalQty,
+                executableValue: notional,
+                expectedPnL: totalPnL
+              });
             } catch (err) {
-              console.error("Fetch failed:", err);
+              console.error("Fetch error:", err);
             }
           };
 
-          fetchData();
-          const interval = setInterval(fetchData, 2000);
-          return () => clearInterval(interval);
+          fetchData(); // runs only once for now
+          // uncomment below to enable polling:
+          // const interval = setInterval(fetchData, 2000);
+          // return () => clearInterval(interval);
         }, []);
+
+        if (!data) return <div>Loading...</div>;
 
         return (
           <div>
-            <h2>📈 Binance BTCUSDT Funding Scanner</h2>
+            <h2>Binance BTCUSDT Funding Scanner</h2>
             <table>
               <thead>
                 <tr>
@@ -110,23 +107,21 @@
                 </tr>
               </thead>
               <tbody>
-                {data.map((d, i) => (
-                  <tr key={i} className={d.expectedPnL > 0 ? "green" : "red"}>
-                    <td>{d.symbol}</td>
-                    <td>{(d.fundingRate * 100).toFixed(4)}%</td>
-                    <td>{d.spread.toFixed(2)}</td>
-                    <td>{d.executableQty.toFixed(4)}</td>
-                    <td>${d.executableValue.toFixed(2)}</td>
-                    <td>${d.expectedPnL.toFixed(4)}</td>
-                  </tr>
-                ))}
+                <tr className={data.expectedPnL > 0 ? "green" : "red"}>
+                  <td>{data.symbol}</td>
+                  <td>{(data.fundingRate * 100).toFixed(4)}%</td>
+                  <td>{data.spread.toFixed(2)}</td>
+                  <td>{data.executableQty.toFixed(4)}</td>
+                  <td>${data.executableValue.toFixed(2)}</td>
+                  <td>${data.expectedPnL.toFixed(4)}</td>
+                </tr>
               </tbody>
             </table>
           </div>
         );
       }
 
-      ReactDOM.createRoot(document.getElementById("root")).render(<BinanceFundingScanner />);
+      ReactDOM.createRoot(document.getElementById("root")).render(<FundingScanner />);
     </script>
   </body>
 </html>

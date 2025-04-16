@@ -1,23 +1,30 @@
 export default async function handler(req, res) {
     try {
-      const [fundingRaw, orderbookRaw] = await Promise.all([
-        fetch("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT").then(res => res.json()),
-        fetch("https://fapi.binance.com/fapi/v1/depth?symbol=BTCUSDT&limit=20").then(res => res.json())
+      const [fundingRes, orderbookRes] = await Promise.all([
+        fetch("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"),
+        fetch("https://fapi.binance.com/fapi/v1/depth?symbol=BTCUSDT&limit=20")
       ]);
   
-      const bids = orderbookRaw.bids.map(b => [parseFloat(b[0]), parseFloat(b[1])]);
-      const asks = orderbookRaw.asks.map(a => [parseFloat(a[0]), parseFloat(a[1])]);
+      if (!fundingRes.ok || !orderbookRes.ok) {
+        throw new Error("Binance API fetch failed");
+      }
   
-      res.status(200).json([{
+      const fundingData = await fundingRes.json();
+      const orderbookData = await orderbookRes.json();
+  
+      const bids = orderbookData.bids.map(([p, q]) => [parseFloat(p), parseFloat(q)]);
+      const asks = orderbookData.asks.map(([p, q]) => [parseFloat(p), parseFloat(q)]);
+  
+      res.status(200).json({
         symbol: "BTCUSDT",
-        fundingRate: parseFloat(fundingRaw.lastFundingRate),
-        bestBid: parseFloat(orderbookRaw.bids[0][0]),
-        bestAsk: parseFloat(orderbookRaw.asks[0][0]),
+        fundingRate: parseFloat(fundingData.lastFundingRate),
+        bestBid: bids[0][0],
+        bestAsk: asks[0][0],
         bids,
         asks
-      }]);
+      });
     } catch (err) {
-      console.error("Binance API failed:", err);
+      console.error("API handler error:", err.message);
       res.status(500).json({ error: "API fetch failed" });
     }
   }
