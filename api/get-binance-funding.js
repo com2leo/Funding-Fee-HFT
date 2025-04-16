@@ -1,27 +1,25 @@
 export default async function handler(req, res) {
     try {
-      const [fundingRes, orderbookRes] = await Promise.all([
-        fetch("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"),
-        fetch("https://fapi.binance.com/fapi/v1/depth?symbol=BTCUSDT&limit=20")
+      const fundingUrl = "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT";
+      const depthUrl = "https://fapi.binance.com/fapi/v1/depth?symbol=BTCUSDT&limit=20";
+  
+      const [fundingRes, depthRes] = await Promise.all([
+        fetch(fundingUrl),
+        fetch(depthUrl)
       ]);
   
-      if (!fundingRes.ok) throw new Error("Funding API failed");
-      if (!orderbookRes.ok) throw new Error("Orderbook API failed");
+      if (!fundingRes.ok) throw new Error(`Funding API failed: ${fundingRes.status}`);
+      if (!depthRes.ok) throw new Error(`Orderbook API failed: ${depthRes.status}`);
   
       const fundingData = await fundingRes.json();
-      const orderbookData = await orderbookRes.json();
+      const depthData = await depthRes.json();
   
-      const bids = Array.isArray(orderbookData.bids)
-        ? orderbookData.bids.map(([p, q]) => [parseFloat(p), parseFloat(q)])
-        : [];
-  
-      const asks = Array.isArray(orderbookData.asks)
-        ? orderbookData.asks.map(([p, q]) => [parseFloat(p), parseFloat(q)])
-        : [];
-  
-      if (asks.length === 0 || bids.length === 0) {
-        throw new Error("Empty asks or bids received from Binance");
+      if (!Array.isArray(depthData.asks) || !Array.isArray(depthData.bids)) {
+        throw new Error("Depth data missing or malformed");
       }
+  
+      const bids = depthData.bids.map(([p, q]) => [parseFloat(p), parseFloat(q)]);
+      const asks = depthData.asks.map(([p, q]) => [parseFloat(p), parseFloat(q)]);
   
       res.status(200).json({
         symbol: "BTCUSDT",
